@@ -60,7 +60,7 @@ void describe_AVInputFormat(
 }
 
 struct AVEasyInputContext {
-	AVFormatParameters  format_parameters;
+	AVDictionary       *format_parameters;
 	AVInputFormat      *input_format;
 	AVFormatContext    *format_context;
 	AVCodecContext     *codec_context;
@@ -84,7 +84,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	AVEasyInputContext *ctx;
 	int i;
 	
-	ctx = malloc(sizeof(*ctx));
+	ctx = (AVEasyInputContext*)malloc(sizeof(*ctx));
 	if(!ctx)
 		goto fail_alloc_context;
 	
@@ -93,28 +93,28 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 		goto fail_alloc_context;
 	ctx->format_context->video_codec_id = connection_codec;
 	
-	memset(&ctx->format_parameters, 0, sizeof(ctx->format_parameters));
-	ctx->format_parameters.prealloced_context = 1;
-	ctx->format_parameters.width = width;
-	ctx->format_parameters.height = height;
+	ctx->format_parameters = NULL;
+	av_dict_set(&ctx->format_parameters, "preallocated_context", "1", 0);
+	char video_size[BUFSIZ];
+	snprintf(video_size, BUFSIZ, "%dx%d", width, height);
+	av_dict_set(&ctx->format_parameters, "video_size", video_size, 0);
 	ctx->input_format = av_find_input_format("video4linux2");
 	if(!ctx->input_format)
 		goto fail_find_input_format;
 	
-	if( av_open_input_file( &ctx->format_context,
+	if( avformat_open_input( &ctx->format_context,
 				path,
 				ctx->input_format,
-				0,
 				&ctx->format_parameters ) )
-		goto fail_open_input_file;
+		goto fail_open_input;
 	
-	if( av_find_stream_info( ctx->format_context ) < 0 )
+	if( avformat_find_stream_info( ctx->format_context, NULL ) < 0 )
 		goto fail_find_stream_info;
 
-	dump_format( ctx->format_context, 0, path, false );
+	av_dump_format( ctx->format_context, 0, path, false );
 	ctx->video_stream = -1;
 	for(i = 0; i < ctx->format_context->nb_streams; ++i) {
-		if( ctx->format_context->streams[i]->codec->codec_type == CODEC_TYPE_VIDEO ) {
+		if( ctx->format_context->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO ) {
 			ctx->video_stream = i;
 			break;
 		}
@@ -141,7 +141,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	ctx->codec = avcodec_find_decoder( ctx->codec_context->codec_id );
 	if(! ctx->codec )
 		goto fail_find_decoder;
-	if( avcodec_open( ctx->codec_context, ctx->codec ) < 0 )
+	if( avcodec_open2( ctx->codec_context, ctx->codec, NULL ) < 0 )
 		goto fail_decoder_open;
 	
 	// Fix for some some codecs which report wrong frame rate
@@ -166,7 +166,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	if( !ctx->buffer )
 		goto fail_alloc_buffer;
 	avpicture_fill(	(AVPicture*) ctx->raw_frame,
-			ctx->buffer,
+			(unsigned char*)ctx->buffer,
 			ctx->pixel_format,
 			ctx->codec_context->width,
 			ctx->codec_context->height );
@@ -195,9 +195,9 @@ fail_find_videostream:
 	}
 
 fail_find_stream_info:
-	av_close_input_file(ctx->format_context);
+	avformat_close_input(&ctx->format_context);
 
-fail_open_input_file:
+fail_open_input:
 fail_find_input_format:
 	av_free(ctx->format_context);
 
@@ -220,7 +220,7 @@ void aveasy_input_close(AVEasyInputContext * const ctx)
 			avcodec_close(ctx->format_context->streams[i]->codec);
 		}
 	}
-	av_close_input_file(ctx->format_context);
+	avformat_close_input(&ctx->format_context);
 	av_free(ctx->format_context);
 }
 

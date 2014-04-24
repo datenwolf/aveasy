@@ -1,2 +1,2 @@
 aveasy - a simple wrapper around libavformat, libavdevice and libswscale
-(from FFmpeg) to make accessing video sources less a pain.
+(from libav 9) to make accessing video sources less a pain.
