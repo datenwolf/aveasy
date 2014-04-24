@@ -31,31 +31,31 @@ void describe_AVInputFormat(
 		return;
 
 	fprintf( stderr,
-		 "name: %s\n"
-		 "long_name: %s\n"
-		 "priv_data_size: %d\n"
-		 "read_probe: %p\n"
-		 "read_header: %p\n" "read_packet: %p\n" "read_close: %p\n"
+		"name: %s\n"
+		"long_name: %s\n"
+		"priv_data_size: %d\n"
+		"read_probe: %p\n"
+		"read_header: %p\n" "read_packet: %p\n" "read_close: %p\n"
 #if LIBAVFORMAT_VERSION_MAJOR < 53
-		 "read_seek: %p\n"
+		"read_seek: %p\n"
 #endif
-		 "read_timestamp: %p\n"
-		 "flags %x\n"
-		 "read_play: %p\n"
-		 "read_pause: %p\n"
-		 "read_seek2: %p\n",
-		 iformat->name,
-		 iformat->long_name,
-		 iformat->priv_data_size,
-		 iformat->read_probe,
-		 iformat->read_header,
-		 iformat->read_packet, iformat->read_close,
+		"read_timestamp: %p\n"
+		"flags %x\n"
+		"read_play: %p\n"
+		"read_pause: %p\n"
+		"read_seek2: %p\n",
+		iformat->name,
+		iformat->long_name,
+		iformat->priv_data_size,
+		iformat->read_probe,
+		iformat->read_header,
+		iformat->read_packet, iformat->read_close,
 #if LIBAVFORMAT_VERSION_MAJOR < 53
-		 iformat->read_seek,
+		iformat->read_seek,
 #endif
-		 iformat->read_timestamp,
-		 iformat->flags,
-		 iformat->read_play, iformat->read_pause, iformat->read_seek2 );
+		iformat->read_timestamp,
+		iformat->flags,
+		iformat->read_play, iformat->read_pause, iformat->read_seek2 );
 
 }
 
@@ -75,10 +75,10 @@ struct AVEasyInputContext {
 };
 
 AVEasyInputContext *aveasy_input_open_v4l2(
-	char const * const path, 
-	unsigned short width, 
+	char const * const path,
+	unsigned short width,
 	unsigned short height,
-	enum CodecID connection_codec, 
+	enum CodecID connection_codec,
 	enum PixelFormat pixel_format )
 {
 	AVEasyInputContext *ctx;
@@ -95,7 +95,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	
 	memset(&ctx->format_parameters, 0, sizeof(ctx->format_parameters));
 	ctx->format_parameters.prealloced_context = 1;
-	ctx->format_parameters.width  = width;
+	ctx->format_parameters.width = width;
 	ctx->format_parameters.height = height;
 	ctx->input_format = av_find_input_format("video4linux2");
 	if(!ctx->input_format)
@@ -146,7 +146,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	
 	// Fix for some some codecs which report wrong frame rate
 	if( ctx->codec_context->time_base.num > 999 &&
-	    ctx->codec_context->time_base.den == 1 )
+		ctx->codec_context->time_base.den == 1 )
 		ctx->codec_context->time_base.den = 1000;
 	
 	ctx->encoded_frame = avcodec_alloc_frame();
@@ -241,21 +241,21 @@ void *aveasy_input_read_frame(AVEasyInputContext * const ctx)
 
 		if( packet.stream_index == ctx->video_stream ) {
 			int frame_finished = 0;
-			avcodec_decode_video2( 
-				ctx->codec_context, 
-				ctx->encoded_frame, 
+			avcodec_decode_video2(
+				ctx->codec_context,
+				ctx->encoded_frame,
 				&frame_finished,
 				&packet);
 
 			if( frame_finished ) {
 				int ret =
-				    sws_scale( ctx->sws_context,
-				    	       ctx->encoded_frame->data,
-					       ctx->encoded_frame->linesize,
-					       0,
-					       ctx->codec_context->height,
-					       ctx->raw_frame->data,
-					       ctx->raw_frame->linesize );
+					sws_scale( ctx->sws_context,
+							ctx->encoded_frame->data,
+							ctx->encoded_frame->linesize,
+							0,
+							ctx->codec_context->height,
+							ctx->raw_frame->data,
+							ctx->raw_frame->linesize );
 				av_free_packet( &packet );
 				return ctx->buffer;
 			}
