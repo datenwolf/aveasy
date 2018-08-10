@@ -27,10 +27,10 @@ typedef struct AVEasyInputContext AVEasyInputContext;
 
 
 AVEasyInputContext *aveasy_input_open_v4l2(
-	char const * const path, 
-	unsigned short width, 
+	char const * const path,
+	unsigned short width,
 	unsigned short height,
-	enum CodecID connection_codec, 
+	enum CodecID connection_codec,
 	enum PixelFormat pixel_format );
 
 

@@ -31,36 +31,36 @@ void describe_AVInputFormat(
 		return;
 
 	fprintf( stderr,
-		 "name: %s\n"
-		 "long_name: %s\n"
-		 "priv_data_size: %d\n"
-		 "read_probe: %p\n"
-		 "read_header: %p\n" "read_packet: %p\n" "read_close: %p\n"
+		"name: %s\n"
+		"long_name: %s\n"
+		"priv_data_size: %d\n"
+		"read_probe: %p\n"
+		"read_header: %p\n" "read_packet: %p\n" "read_close: %p\n"
 #if LIBAVFORMAT_VERSION_MAJOR < 53
-		 "read_seek: %p\n"
+		"read_seek: %p\n"
 #endif
-		 "read_timestamp: %p\n"
-		 "flags %x\n"
-		 "read_play: %p\n"
-		 "read_pause: %p\n"
-		 "read_seek2: %p\n",
-		 iformat->name,
-		 iformat->long_name,
-		 iformat->priv_data_size,
-		 iformat->read_probe,
-		 iformat->read_header,
-		 iformat->read_packet, iformat->read_close,
+		"read_timestamp: %p\n"
+		"flags %x\n"
+		"read_play: %p\n"
+		"read_pause: %p\n"
+		"read_seek2: %p\n",
+		iformat->name,
+		iformat->long_name,
+		iformat->priv_data_size,
+		iformat->read_probe,
+		iformat->read_header,
+		iformat->read_packet, iformat->read_close,
 #if LIBAVFORMAT_VERSION_MAJOR < 53
-		 iformat->read_seek,
+		iformat->read_seek,
 #endif
-		 iformat->read_timestamp,
-		 iformat->flags,
-		 iformat->read_play, iformat->read_pause, iformat->read_seek2 );
+		iformat->read_timestamp,
+		iformat->flags,
+		iformat->read_play, iformat->read_pause, iformat->read_seek2 );
 
 }
 
 struct AVEasyInputContext {
-	AVFormatParameters  format_parameters;
+	AVDictionary       *format_parameters;
 	AVInputFormat      *input_format;
 	AVFormatContext    *format_context;
 	AVCodecContext     *codec_context;
@@ -75,16 +75,16 @@ struct AVEasyInputContext {
 };
 
 AVEasyInputContext *aveasy_input_open_v4l2(
-	char const * const path, 
-	unsigned short width, 
+	char const * const path,
+	unsigned short width,
 	unsigned short height,
-	enum CodecID connection_codec, 
+	enum CodecID connection_codec,
 	enum PixelFormat pixel_format )
 {
 	AVEasyInputContext *ctx;
 	int i;
 	
-	ctx = malloc(sizeof(*ctx));
+	ctx = (AVEasyInputContext*)malloc(sizeof(*ctx));
 	if(!ctx)
 		goto fail_alloc_context;
 	
@@ -93,28 +93,28 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 		goto fail_alloc_context;
 	ctx->format_context->video_codec_id = connection_codec;
 	
-	memset(&ctx->format_parameters, 0, sizeof(ctx->format_parameters));
-	ctx->format_parameters.prealloced_context = 1;
-	ctx->format_parameters.width  = width;
-	ctx->format_parameters.height = height;
+	ctx->format_parameters = NULL;
+	av_dict_set(&ctx->format_parameters, "preallocated_context", "1", 0);
+	char video_size[BUFSIZ];
+	snprintf(video_size, BUFSIZ, "%dx%d", width, height);
+	av_dict_set(&ctx->format_parameters, "video_size", video_size, 0);
 	ctx->input_format = av_find_input_format("video4linux2");
 	if(!ctx->input_format)
 		goto fail_find_input_format;
 	
-	if( av_open_input_file( &ctx->format_context,
+	if( avformat_open_input( &ctx->format_context,
 				path,
 				ctx->input_format,
-				0,
 				&ctx->format_parameters ) )
-		goto fail_open_input_file;
+		goto fail_open_input;
 	
-	if( av_find_stream_info( ctx->format_context ) < 0 )
+	if( avformat_find_stream_info( ctx->format_context, NULL ) < 0 )
 		goto fail_find_stream_info;
 
-	dump_format( ctx->format_context, 0, path, false );
+	av_dump_format( ctx->format_context, 0, path, false );
 	ctx->video_stream = -1;
 	for(i = 0; i < ctx->format_context->nb_streams; ++i) {
-		if( ctx->format_context->streams[i]->codec->codec_type == CODEC_TYPE_VIDEO ) {
+		if( ctx->format_context->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO ) {
 			ctx->video_stream = i;
 			break;
 		}
@@ -141,12 +141,12 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	ctx->codec = avcodec_find_decoder( ctx->codec_context->codec_id );
 	if(! ctx->codec )
 		goto fail_find_decoder;
-	if( avcodec_open( ctx->codec_context, ctx->codec ) < 0 )
+	if( avcodec_open2( ctx->codec_context, ctx->codec, NULL ) < 0 )
 		goto fail_decoder_open;
 	
 	// Fix for some some codecs which report wrong frame rate
 	if( ctx->codec_context->time_base.num > 999 &&
-	    ctx->codec_context->time_base.den == 1 )
+		ctx->codec_context->time_base.den == 1 )
 		ctx->codec_context->time_base.den = 1000;
 	
 	ctx->encoded_frame = avcodec_alloc_frame();
@@ -166,7 +166,7 @@ AVEasyInputContext *aveasy_input_open_v4l2(
 	if( !ctx->buffer )
 		goto fail_alloc_buffer;
 	avpicture_fill(	(AVPicture*) ctx->raw_frame,
-			ctx->buffer,
+			(unsigned char*)ctx->buffer,
 			ctx->pixel_format,
 			ctx->codec_context->width,
 			ctx->codec_context->height );
@@ -195,9 +195,9 @@ fail_find_videostream:
 	}
 
 fail_find_stream_info:
-	av_close_input_file(ctx->format_context);
+	avformat_close_input(&ctx->format_context);
 
-fail_open_input_file:
+fail_open_input:
 fail_find_input_format:
 	av_free(ctx->format_context);
 
@@ -220,7 +220,7 @@ void aveasy_input_close(AVEasyInputContext * const ctx)
 			avcodec_close(ctx->format_context->streams[i]->codec);
 		}
 	}
-	av_close_input_file(ctx->format_context);
+	avformat_close_input(&ctx->format_context);
 	av_free(ctx->format_context);
 }
 
@@ -241,21 +241,21 @@ void *aveasy_input_read_frame(AVEasyInputContext * const ctx)
 
 		if( packet.stream_index == ctx->video_stream ) {
 			int frame_finished = 0;
-			avcodec_decode_video2( 
-				ctx->codec_context, 
-				ctx->encoded_frame, 
+			avcodec_decode_video2(
+				ctx->codec_context,
+				ctx->encoded_frame,
 				&frame_finished,
 				&packet);
 
 			if( frame_finished ) {
 				int ret =
-				    sws_scale( ctx->sws_context,
-				    	       ctx->encoded_frame->data,
-					       ctx->encoded_frame->linesize,
-					       0,
-					       ctx->codec_context->height,
-					       ctx->raw_frame->data,
-					       ctx->raw_frame->linesize );
+					sws_scale( ctx->sws_context,
+							ctx->encoded_frame->data,
+							ctx->encoded_frame->linesize,
+							0,
+							ctx->codec_context->height,
+							ctx->raw_frame->data,
+							ctx->raw_frame->linesize );
 				av_free_packet( &packet );
 				return ctx->buffer;
 			}
